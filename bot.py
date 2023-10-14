@@ -39,22 +39,6 @@ def add_user(Telegram_id: int, Username: str, FirstName: str, LastName: str):
 async def cmd_start(message: types.Message):
     await message.answer(f"Привет, {html.bold(message.from_user.first_name)}!")
     add_user(message.from_user.id, message.from_user.username, message.from_user.first_name, message.from_user.last_name)
-
-
-@dp.message(Command("name"))
-async def cmd_name(message: types.Message, command: CommandObject):
-    if command.args:
-        await message.answer(f"Привет, {html.bold(html.quote(command.args))}!")
-    else:
-        await message.answer("Имя своё черкани после команды /name!")
-    
-
-@dp.message(F.text)
-async def echo_with_time(message: types.Message):
-    time_now = datetime.now().strftime('%H:%M')
-    added_text = html.underline(f"Создано в {time_now}")
-    await message.answer(f"{message.html_text}\n\n{added_text}")
-
     
 async def main():
     await dp.start_polling(bot)
