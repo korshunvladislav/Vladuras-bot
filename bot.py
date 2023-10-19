@@ -1,9 +1,11 @@
 import asyncio
 import logging
 import sqlite3
+import gspread
 
 from aiogram import Bot, Dispatcher, types, html, F
 from aiogram.filters import Command
+from gspread import Client, Spreadsheet, Worksheet
 
 from config_reader import config
 
@@ -12,6 +14,8 @@ logging.basicConfig(level=logging.INFO)
 bot = Bot(token=config.bot_token.get_secret_value(), parse_mode="HTML")
 
 dp = Dispatcher()
+
+spreadsheets_url = "https://docs.google.com/spreadsheets/d/1GeQ58yEc_BMLnX0gB_nWt8ve7GO4Qj6HndqbFcfyNGk/edit?usp=sharing"
 
 connection = sqlite3.connect("database.db")
 cursor = connection.cursor()
@@ -40,10 +44,44 @@ async def set_group(GroupNumber: str, Username: str):
     connection.commit()
 
 
+async def show_available_worksheets(sh: Spreadsheet):
+    worksheets = sh.worksheets()
+
+    for ws in worksheets:
+        print("Worksheet with title", repr(ws.title), "and id", ws.id)
+
+
+async def show_main_ws(sh: Spreadsheet):
+    main_ws = sh.sheet1
+    print("Main ws:", main_ws)
+
+
+async def show_all_values_in_ws(ws: Worksheet):
+    list_of_lists = ws.get_all_values()
+    print(list_of_lists)
+    print("===" * 20)
+    for row in list_of_lists:
+        print(row)
+    myFile = open('output.txt', 'w')
+    for element in list_of_lists:
+        myFile.write(str(element))
+        myFile.write("\n")
+    myFile.close()
+
+
+async def main_spreadsheets():
+    gc: Client = gspread.service_account("./service_account.json")
+    sh: Spreadsheet = gc.open_by_url(spreadsheets_url)
+    print(sh)
+    ws = sh.sheet1
+    await show_all_values_in_ws(ws)
+
+
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
-    await message.answer(f"Привет, {html.bold(message.from_user.first_name)}!")
-    add_user(message.from_user.id, message.from_user.username, message.from_user.first_name, message.from_user.last_name)
+    user = message.from_user
+    await message.answer(f"Привет, {html.bold(user.first_name)}!")
+    add_user(user.id, user.username, user.first_name, user.last_name)
 
 
 @dp.message(Command("set_group"))
@@ -62,6 +100,12 @@ async def cmd_set_group(message: types.Message):
     await message.answer("В какой вы группе?", reply_markup=keyboard)
 
 
+@dp.message(Command("get_schedule"))
+async def cmd_get_schedule(message: types.Message):
+    await main_spreadsheets()
+    await message.answer("👌")
+
+
 @dp.message(F.text)
 async def text_handling(message: types.Message):
     text = message.text
@@ -70,6 +114,8 @@ async def text_handling(message: types.Message):
         cursor.execute('UPDATE Users SET groupNumber = ? WHERE TelegramID = ?', (text, user.id))
         connection.commit()
         await message.answer(f"Теперь ваша группа {text}")
+    elif "БИВ23" == text[:5] and len(text) == 6:
+        await message.answer("Данной группы не существует")
 
     
 async def main():
