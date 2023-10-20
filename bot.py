@@ -64,6 +64,8 @@ async def show_all_values_in_ws(ws: Worksheet):
         print(row)
     myFile = open('output.txt', 'w')
     for element in list_of_lists:
+        for i in range(len(element)):
+            element[i] = element[i].center(55)
         myFile.write(str(element))
         myFile.write("\n")
     myFile.close()
