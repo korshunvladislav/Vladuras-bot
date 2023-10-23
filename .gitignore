@@ -162,3 +162,8 @@ cython_debug/
 .DS_Store
 config_reader.py
 database.db
+test.py
+service_account.json
+output.txt
+formatted_output.txt
+data.json
