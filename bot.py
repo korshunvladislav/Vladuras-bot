@@ -85,7 +85,7 @@ async def show_all_values_in_ws(ws: Worksheet):
 
 
 async def main_spreadsheets():
-    gc: Client = gspread.service_account("./service_account.json")
+    gc: Client = gspread.service_account()
     sh: Spreadsheet = gc.open_by_url(spreadsheets_url)
     print(sh)
     ws = sh.sheet1
