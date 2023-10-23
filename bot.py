@@ -2,9 +2,11 @@ import asyncio
 import logging
 import sqlite3
 import gspread
+import datetime as dt
+import json
 
 from aiogram import Bot, Dispatcher, types, html, F
-from aiogram.filters import Command
+from aiogram.filters import Command, CommandObject
 from gspread import Client, Spreadsheet, Worksheet
 
 from config_reader import config
@@ -44,6 +46,20 @@ async def set_group(GroupNumber: str, Username: str):
     connection.commit()
 
 
+async def get_group(Telegram_id):
+    cursor.execute('SELECT groupNumber FROM Users WHERE TelegramID = ?', (Telegram_id,))
+    result = cursor.fetchall()[0][0]
+    return result
+
+
+async def is_valid_date(date_string):
+    try:
+        datetime_object = dt.datetime.strptime(date_string, '%d.%m.%Y')
+        return True
+    except ValueError:
+        return False
+    
+
 async def show_available_worksheets(sh: Spreadsheet):
     worksheets = sh.worksheets()
 
@@ -58,17 +74,14 @@ async def show_main_ws(sh: Spreadsheet):
 
 async def show_all_values_in_ws(ws: Worksheet):
     list_of_lists = ws.get_all_values()
-    print(list_of_lists)
-    print("===" * 20)
-    for row in list_of_lists:
-        print(row)
-    myFile = open('output.txt', 'w')
-    for element in list_of_lists:
-        for i in range(len(element)):
-            element[i] = element[i].center(55)
-        myFile.write(str(element))
-        myFile.write("\n")
-    myFile.close()
+    with open('data.json', 'w') as file:
+        json.dump(list_of_lists, file, ensure_ascii=False)
+    with open('formatted_output.txt', 'w') as formatted_file:
+        for element in list_of_lists:
+            for i in range(len(element)):
+                element[i] = element[i].replace(" \nсеминар\nЕрохина", "").center(55)
+            formatted_file.write(str(element))
+            formatted_file.write("\n")
 
 
 async def main_spreadsheets():
@@ -102,10 +115,63 @@ async def cmd_set_group(message: types.Message):
     await message.answer("В какой вы группе?", reply_markup=keyboard)
 
 
-@dp.message(Command("get_schedule"))
-async def cmd_get_schedule(message: types.Message):
+@dp.message(Command("generate_file"))
+async def cmd_generate_file(message: types.Message):
     await main_spreadsheets()
-    await message.answer("👌")
+    await message.answer("Файл успешно создан")
+
+
+@dp.message(Command("get_schedule"))
+async def cmd_get_schedule(message: types.Message, command: CommandObject):
+    groupNumber = await get_group(message.from_user.id)
+    with open('data.json', 'r') as file:
+        loaded_list_of_lists = json.load(file)
+    if command.args is None:
+        date = dt.date.today().strftime("%d.%m.%Y")
+        await message.answer("Расписание на сегодня:")
+    else:
+        if await is_valid_date(command.args):
+            date = dt.datetime.strptime(command.args, '%d.%m.%Y').strftime("%d.%m.%Y")
+            await message.answer(f"Расписание на {date}:")
+        else:
+            await message.answer("Неверный формат даты")
+            return
+    date_index = []
+    for i in range(len(loaded_list_of_lists)):
+        for j in range(len(loaded_list_of_lists[i])):                
+            if date in loaded_list_of_lists[i][j]:
+                date_index.append(i)
+                date_index.append(j)
+                break
+        else:
+            continue
+        break
+    group_index = -1
+    for i in range(date_index[1], len(loaded_list_of_lists[0])):
+        if loaded_list_of_lists[0][i] == groupNumber:
+            group_index = i
+            break
+    lectures = []
+    for i in range(date_index[0], date_index[0] + 25, 4):
+        temp_lect = []
+        for j in range(4):
+            temp_lect.append(loaded_list_of_lists[i + j][group_index])
+        temp_lect.insert(1, loaded_list_of_lists[i][date_index[1] + 1])
+        lectures.append(temp_lect)
+    await message.answer(str(lectures))
+    message_for_user = ""
+    gap_count = 0
+    for i in range(len(lectures)):
+        if lectures[i][0] == "" and message_for_user != "":
+            gap_count += 1
+        else:
+            if gap_count > 0:
+                message_for_user += f"{html.bold(html.italic('Количество окон:'))} {gap_count}\n"
+                message_for_user += f"{html.italic('Общее время перерыва:')} {(gap_count * 80 + (gap_count + 1) * 20) // 60} ч {(gap_count * 80 + (gap_count + 1) * 20) % 60} мин\n\n"
+                gap_count = 0
+            if lectures[i][0] != "":
+                message_for_user += f"{html.italic('Предмет:')} {lectures[i][0]}\n{html.italic('Время:')} {lectures[i][1]}\n{html.italic('Тип пары:')} {lectures[i][2]}\n{html.italic('Преподаватель:')} {lectures[i][3]}\n{html.italic('Аудитория:')} {lectures[i][4]}\n\n"
+    await message.answer(message_for_user)
 
 
 @dp.message(F.text)
